@@ -1,0 +1,27 @@
+INFOGRAFICOS 14 E 15 — PACOTE PARA AGRICULTORES
+
+Gerado em: 2026-09-28
+Script novo: Codigos/gerar_infograficos.R
+Fonte de dados: Codigos/ResultadosFinal/Bases/base_produto_planta.csv
+
+CRITERIOS
+- Foram mantidos apenas registros com situacao == "Ativo".
+- Medicamentos: produto unico (chave_produto) contado uma vez por planta.
+- Empresas: empresa unica contada uma vez por planta.
+- Os nomes das plantas usam o primeiro nome antes da barra, como nos graficos originais.
+- Posicoes empatadas recebem o mesmo numero e a mesma enfase visual.
+- As empresas em destaque sao ordenadas pelo numero de medicamentos ativos associados a cada planta.
+
+ARQUIVOS
+- 14_infografico_medicamentos_ativos_por_planta.png
+- 14_infografico_medicamentos_ativos_por_planta.pdf
+- 14_infografico_medicamentos_ativos_por_planta.svg
+- 15_infografico_empresas_por_planta_ativos.png
+- 15_infografico_empresas_por_planta_ativos.pdf
+- 15_infografico_empresas_por_planta_ativos.svg
+- 14_15_infograficos_plantas_mercado.pdf
+- dados_infograficos.xlsx
+
+NOTA DE INTERPRETACAO
+Os numeros retratam presenca em registros ativos da Anvisa.
+Nao devem ser interpretados isoladamente como preco, demanda futura ou garantia de compra.
