@@ -1,6 +1,6 @@
 # Plantas e produtos registrados na Anvisa
 
-Códigos do projeto Fiocruz/EPGE para relacionar plantas, produtos e empresas nos mercados de medicamentos, alimentos, cosméticos e saneantes.
+Códigos do projeto Fiocruz para relacionar plantas, produtos e empresas nos mercados de medicamentos, alimentos, cosméticos e saneantes.
 
 ## Fluxo do projeto
 
@@ -23,12 +23,6 @@ Catálogo de plantas → coleta na Anvisa → análise dos produtos → localiza
 | `Codigos - Mapas/gerar_mapas_mercados_e_territorios.R` | Gera mapas gerais por mercado e recortes das regiões de interesse. |
 
 `funcoes_analise.R` e `graficos_medicamentos.R` são auxiliares chamados pelas análises.
-
-## Mapas HTML
-
-Baixe o projeto, extraia o ZIP e abra `Codigos - Mapas/MapasFinais/index.html` no navegador. Mantenha `interativos/bibliotecas/` junto aos HTMLs. Para compartilhar apenas os mapas, envie a pasta `MapasFinais` inteira.
-
-Os mapas permitem selecionar mercados e consultar empresas e plantas nos pontos. A hachura indica a região de interesse. Nos mercados pesquisados por nome, a associação **não comprova a presença da planta na composição**. A publicação pelo GitHub Pages fica para uma etapa posterior.
 
 ## Dados e execução
 
