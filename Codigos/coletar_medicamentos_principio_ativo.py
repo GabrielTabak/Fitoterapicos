@@ -19,7 +19,7 @@ ARQUIVO_ENTRADA = BASE_DIR / "dados/plantas_busca.csv"
 PASTA_DOWNLOADS = BASE_DIR / "Downloads"
 ARQUIVO_PROGRESSO = PASTA_DOWNLOADS / "progresso_anvisa.csv"
 URL = "https://consultas.anvisa.gov.br/#/medicamentos/"
-VERSAO_ESTADO = "coletor_unificado_v1"
+VERSAO_ESTADO = "coletor_unificado_v2"
 TIMEOUT_MS = 60000
 STATUS_ARQUIVO = {
     "excel_baixado",
@@ -34,6 +34,10 @@ COLUNAS_TERMOS = [
     "Variacoes_nome_popular_encontradas",
     "Variacoes_nome_cientifico_encontradas",
 ]
+
+
+class ConsultaNaoConfirmada(RuntimeError):
+    """Falha de uma consulta; manter o termo pendente e seguir a fila."""
 
 
 class AcessoBloqueado(RuntimeError):
@@ -277,16 +281,30 @@ async def esta_na_busca_avancada(page):
 
 
 async def preparar_pagina(page):
+    await fechar_todos_modais(page)
+    if await esta_na_busca_avancada(page):
+        await limpar_principio_ativo(page)
+        return
     response = await page.goto(URL, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
     if response is not None and response.status in {403, 429}:
         raise AcessoBloqueado(
-            f"Anvisa recusou o acesso (HTTP {response.status}). Verifique o acesso no servidor antes de retomar."
+            f"A sessão do Chromium recebeu HTTP {response.status} ao abrir a Anvisa. "
+            "Isso não determina se o acesso funciona em outro navegador. "
+            "Use --mostrar-navegador para acompanhar a tentativa local."
         )
-    botao = page.locator("input[value='Busca Avançada']").first
-    await botao.wait_for(state="visible", timeout=30000)
-    await botao.click(force=True)
-    lupa = page.locator(SEL_LUPA_PRINCIPIO).first
-    await lupa.wait_for(state="visible", timeout=20000)
+    # A página pode abrir diretamente nos critérios avançados.
+    controles = page.locator(
+        f"{SEL_LUPA_PRINCIPIO}, input[value='Busca Avançada']"
+    )
+    controle = await esperar_primeiro_visivel(page, controles, timeout_ms=TIMEOUT_MS)
+    if controle is None:
+        raise RuntimeError("Página sem Princípio Ativo nem botão Busca Avançada visíveis.")
+    if not await esta_na_busca_avancada(page):
+        await page.locator("input[value='Busca Avançada']").first.click()
+        await page.locator(SEL_LUPA_PRINCIPIO).first.wait_for(
+            state="visible", timeout=TIMEOUT_MS
+        )
+    await limpar_principio_ativo(page)
 
 
 async def garantir_tela_busca(page):
@@ -426,8 +444,24 @@ async def pesquisar_modal(page, termo):
     ) as evento:
         await modal.locator("input[type='submit'][value='Pesquisar']").first.click()
     response = await evento.value
-    if response.status in {403, 429}:
-        raise AcessoBloqueado(f"Anvisa recusou a busca (HTTP {response.status}).")
+    if response.status == 403:
+        try:
+            erro = await response.json()
+        except Exception:
+            erro = {}
+        if isinstance(erro, dict) and erro.get("codigo") == "turnstile_invalido":
+            raise AcessoBloqueado(
+                "A Anvisa não validou a sessão do navegador (Cloudflare Turnstile). "
+                "Esta consulta NÃO confirma ausência de registros. "
+                "Progresso preservado; nenhuma ausência será gravada. "
+                "Verifique a validação de acesso no navegador antes de retomar."
+            )
+        raise AcessoBloqueado(
+            "A consulta recebeu HTTP 403; não é confirmação de ausência. "
+            "Progresso preservado; verifique o acesso antes de retomar."
+        )
+    if response.status == 429:
+        raise AcessoBloqueado("Limite de consultas atingido (HTTP 429). Retome mais tarde.")
     if response.status != 200:
         raise RuntimeError(f"Busca de substâncias retornou HTTP {response.status}.")
     payload = await response.json()
@@ -555,16 +589,12 @@ async def processar_termo(page, termo, opcoes_concluidas, tentativas):
     await preparar_pagina(page)
     estado, opcoes = await pesquisar_opcoes_principio(page, termo)
     if estado == "sem_registro":
-        # Confirma a ausência em uma segunda consulta, dentro do mesmo fluxo.
-        await preparar_pagina(page)
-        estado, opcoes = await pesquisar_opcoes_principio(page, termo)
-        if estado == "sem_registro":
-            registrar_progresso(
-                termo,
-                "sem_registro",
-                detalhe="Duas respostas HTTP válidas com totalElements=0",
-            )
-            return True
+        registrar_progresso(
+            termo,
+            "sem_registro",
+            detalhe="Resposta HTTP 200 válida com totalElements=0.",
+        )
+        return True
     erros = 0
     for opcao in opcoes:
         par = chave_texto(termo), chave_texto(opcao)
@@ -621,6 +651,8 @@ async def executar(args):
     if not pendentes:
         return 0
     async with async_playwright() as p:
+        modo = "com janela" if args.mostrar_navegador else "sem janela; use --mostrar-navegador para exibir"
+        print(f"Iniciando Chromium ({modo}).", flush=True)
         browser = await p.chromium.launch(headless=not args.mostrar_navegador)
         try:
             for rodada in range(args.rodadas):
@@ -643,7 +675,25 @@ async def executar(args):
                                 termo, "acesso_bloqueado", detalhe=str(erro)
                             )
                             print(str(erro), flush=True)
+                            if args.mostrar_navegador and sys.stdin.isatty():
+                                print(
+                                    "Coleta pausada; o progresso já foi salvo. "
+                                    "O navegador ficará aberto para você conferir a página. "
+                                    "Consultas manuais nesta pausa não serão salvas pelo coletor.",
+                                    flush=True,
+                                )
+                                try:
+                                    input("Pressione Enter no Terminal para fechar e encerrar. ")
+                                except EOFError:
+                                    pass
                             return 3
+                        except ConsultaNaoConfirmada as erro:
+                            registrar_progresso(
+                                termo, "consulta_nao_confirmada", detalhe=str(erro)
+                            )
+                            print(f"  {erro} Seguindo para o próximo termo.", flush=True)
+                            ok = False
+                            await asyncio.sleep(args.pausa)
                         except Exception as erro:
                             registrar_progresso(termo, "erro_termo", detalhe=str(erro))
                             print(f"  Pendente: {erro}", flush=True)
@@ -715,7 +765,7 @@ def main():
         )
         return 0
     PASTA_DOWNLOADS.mkdir(parents=True, exist_ok=True)
-    # Servidores Linux/macOS: libera o lock automaticamente se o processo cair.
+    # Linux/macOS: libera o lock automaticamente se o processo cair.
     import fcntl
 
     with (PASTA_DOWNLOADS / ".coleta.lock").open("w") as lock:
