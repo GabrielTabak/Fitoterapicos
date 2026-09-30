@@ -13,7 +13,7 @@ Catálogo de plantas → coleta na Anvisa → análise dos produtos → localiza
 | Arquivo | Função |
 | --- | --- |
 | `Codigos/coletar_medicamentos_principio_ativo.py` | Busca medicamentos por princípio ativo, com retomada e revisão automática de pendências. |
-| `Codigos/coletar_produtos_por_nome_v43.ipynb` | Registro da coleta por nome já concluída. **Não reexecutar.** |
+| `Codigos/coletar_produtos_por_nome_v43.ipynb` | Registro da coleta por nome. |
 | `Codigos/analisar_medicamentos.R` | Consolida medicamentos e gera bases e gráficos. |
 | `Codigos/analisar_produtos_por_nome.R` | Analisa alimentos, cosméticos e saneantes da planilha final. |
 | `Codigos/gerar_infograficos.R` | Produz infográficos de medicamentos. |
